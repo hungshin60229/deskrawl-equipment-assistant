@@ -1,0 +1,7 @@
+資料/
+__pycache__/
+*.pyc
+build/
+release/
+*.spec
+.venv/
