@@ -8,21 +8,33 @@ from urllib.parse import urlsplit,parse_qs
 from datetime import datetime
 from reader import LiveReader,stable_capture,GameClosed,NotReady,VersionMismatch
 from model import enrich,SLOT_NAMES
+from loadouts import Library
 
 BUNDLE=Path(getattr(sys,'_MEIPASS',Path(__file__).resolve().parent))
 HOME=Path(sys.executable).parent if getattr(sys,'frozen',False) else Path(__file__).resolve().parent
-DATA=HOME/'資料';DATA.mkdir(exist_ok=True)
+DATA=HOME/'資料'
+if not getattr(sys,'frozen',False) and '--data-dir' in sys.argv:
+    DATA=Path(sys.argv[sys.argv.index('--data-dir')+1]).resolve()
+DATA.mkdir(parents=True,exist_ok=True)
 ASSETS=BUNDLE/'assets'
 CATALOG=json.loads((ASSETS/'catalog.json').read_text(encoding='utf-8'))
+library=Library(DATA,CATALOG['stat_names'])
 CONFIG=json.loads((ASSETS/'reader_config.json').read_text(encoding='utf-8'))
 try:filters=json.loads((DATA/'篩選條件.json').read_text(encoding='utf-8'))
 except (OSError,ValueError):filters={'slot':'','primary':[],'secondary':[]}
 state={'status':'waiting','message':'正在連接遊戲','items':[],'character':None,'updated_at':None,'revision':0}
 lock=threading.Lock();stop=threading.Event();token=secrets.token_urlsafe(24)
 logging.basicConfig(filename=DATA/'小助手.log',encoding='utf-8',level=logging.INFO,format='%(asctime)s %(message)s')
+desktop_shell=None
+maintenance_active=threading.Event()
+
+def refresh_icon(selected):
+    atomic_json(DATA/'圖示設定.json',{'selected':selected})
+    if desktop_shell:threading.Thread(target=desktop_shell.refresh,daemon=True).start()
 
 def prepare_maintenance(job):
     maintenance.handoff(HOME,job)
+    maintenance_active.set()
     stop.set()
 
 manager=maintenance.Manager(HOME,getattr(sys,'frozen',False),prepare_maintenance)
@@ -56,6 +68,9 @@ def monitor():
                     atomic_json(DATA/'最新裝備.json',{'captured_at':now,**snapshot})
                     previous=snapshot
                 with lock:
+                    if changed:
+                        try:library.observe(snapshot['character'],rows)
+                        except (ValueError,OSError):logging.exception('Build 最新裝備紀錄未保存')
                     state.update(status='connected',message='已連接遊戲',items=rows,character=snapshot['character'],updated_at=now)
                     if changed:state['revision']+=1
                 last_error=None
@@ -91,9 +106,13 @@ class Handler(BaseHTTPRequestHandler):
             elif path=='/api/catalog':body=json.dumps({'pools':CATALOG['pools'],'stat_names':CATALOG['stat_names'],'slots':SLOT_NAMES},ensure_ascii=False).encode('utf-8')
             elif path=='/api/filters':
                 with lock:body=json.dumps(filters,ensure_ascii=False).encode('utf-8')
+            elif path=='/api/loadouts':
+                with lock:body=json.dumps(library.view(state['character'],state['items']),ensure_ascii=False).encode('utf-8')
             elif path=='/api/avatars':
                 with lock:selected,entries=avatar_library();body=json.dumps({'selected':selected,'images':entries},ensure_ascii=False).encode('utf-8')
             elif path=='/api/maintenance':body=json.dumps(manager.snapshot(),ensure_ascii=False).encode('utf-8')
+            elif path=='/api/desktop':
+                body=json.dumps({'tray_visible':bool(desktop_shell and desktop_shell.tray and desktop_shell.tray.Visible),'window_visible':bool(desktop_shell and desktop_shell.window.native.Visible),'icon_sha256':desktop_shell.icon_hash if desktop_shell else None}).encode('utf-8')
             else:self.send(404,b'Not found','text/plain');return
             self.send(200,body,'application/json; charset=utf-8');return
         if path=='/':filename=ASSETS/'index.html'
@@ -102,7 +121,7 @@ class Handler(BaseHTTPRequestHandler):
             filename=ASSETS/'avatar-default.png' if selected=='default' else DATA/'圖片收藏'/(selected+'.png')
         elif path=='/avatar-default.png':filename=ASSETS/'avatar-default.png'
         elif re.fullmatch(r'/avatars/[0-9a-f]{64}\.png',path):filename=DATA/'圖片收藏'/path.rsplit('/',1)[1]
-        elif path in ['/app.js','/style.css']:filename=ASSETS/path[1:]
+        elif path in ['/app.js','/style.css','/builds.js','/builds.css']:filename=ASSETS/path[1:]
         elif path.startswith('/icons/') and '/' not in path[7:] and '..' not in path:filename=ASSETS/path[1:]
         else:self.send(404,b'Not found','text/plain');return
         if not filename.is_file():self.send(404,b'Not found','text/plain');return
@@ -112,6 +131,24 @@ class Handler(BaseHTTPRequestHandler):
         if self.headers.get('Host') not in [f'127.0.0.1:{self.server.server_port}',f'localhost:{self.server.server_port}']:
             self.send(403,b'Forbidden','text/plain');return
         if self.headers.get('X-Assistant-Token')!=token:self.send(403,b'Forbidden','text/plain');return
+        if self.path=='/api/loadouts':
+            try:
+                length=int(self.headers.get('Content-Length','0'))
+                if not 0<length<32768:raise ValueError('操作資料過大')
+                command=json.loads(self.rfile.read(length))
+                if not isinstance(command,dict):raise ValueError('操作格式不正確')
+                with lock:
+                    if state['status']!='connected':raise ValueError('請等待角色成功同步後再修改收藏或 Build')
+                    from loadouts import scope
+                    if command.get('scope')!=scope(state['character']):raise ValueError('角色已切換，請等待畫面同步後重試')
+                    result=library.change(state['character'],state['items'],command)
+                self.send(200,json.dumps(result,ensure_ascii=False).encode('utf-8'),'application/json; charset=utf-8')
+            except (ValueError,KeyError,OSError) as error:
+                self.send(400,json.dumps({'error':str(error)},ensure_ascii=False).encode('utf-8'),'application/json; charset=utf-8')
+            return
+        if self.path=='/api/hide':
+            if not desktop_shell:self.send(400,b'No desktop window','text/plain');return
+            desktop_shell.hide();self.send(200,b'{}','application/json');return
         if self.path in ['/api/update','/api/uninstall','/api/update/cancel']:
             try:
                 if self.path=='/api/update/cancel':
@@ -135,6 +172,7 @@ class Handler(BaseHTTPRequestHandler):
                     legacy=DATA/'自訂頭像.png'
                     if legacy.is_file() and hashlib.sha256(legacy.read_bytes()).hexdigest()==key:legacy.unlink()
                     path.unlink()
+                if selected==key:refresh_icon('default')
                 self.send(200,b'{}','application/json')
             except (ValueError,KeyError):self.send(400,b'Invalid image','text/plain')
             return
@@ -147,6 +185,7 @@ class Handler(BaseHTTPRequestHandler):
                     _,entries=avatar_library()
                     if selected not in [entry['id'] for entry in entries]:raise ValueError()
                     atomic_json(DATA/'頭像設定.json',{'selected':selected})
+                refresh_icon(selected)
                 self.send(200,b'{}','application/json')
             except (ValueError,KeyError):self.send(400,b'Invalid image','text/plain')
             return
@@ -167,6 +206,7 @@ class Handler(BaseHTTPRequestHandler):
                     (DATA/'圖片收藏'/(key+'.png')).write_bytes(raw)
                     atomic_json(DATA/'頭像設定.json',{'selected':key})
                     temp=DATA/'自訂頭像.tmp';temp.write_bytes(output.getvalue());temp.replace(DATA/'自訂頭像.png')
+                refresh_icon(key)
                 self.send(200,b'{}','application/json')
             except (ValueError,OSError,UnidentifiedImageError,Image.DecompressionBombError) as error:
                 self.send(400,json.dumps({'error':str(error)},ensure_ascii=False).encode('utf-8'),'application/json; charset=utf-8')
@@ -186,8 +226,18 @@ class Handler(BaseHTTPRequestHandler):
         self.send(200,b'{}','application/json');stop.set();threading.Thread(target=self.server.shutdown,daemon=True).start()
 
 def main():
+    global desktop_shell
+    if '--browser-preview' in sys.argv and not getattr(sys,'frozen',False):
+        server=ThreadingHTTPServer(('127.0.0.1',0),Handler)
+        atomic_json(DATA/'連線.json',{'mode':'source-preview','url':f'http://127.0.0.1:{server.server_port}/#token={token}','pid':os.getpid()})
+        worker=threading.Thread(target=monitor,daemon=True);worker.start()
+        try:server.serve_forever(poll_interval=.25)
+        finally:stop.set();worker.join(timeout=3);server.server_close()
+        return
     import ctypes as C
     import webview
+    from desktop_icons import DesktopShell
+    C.windll.shell32.SetCurrentProcessExplicitAppUserModelID('Deskrawl.EquipmentAssistant'+('.Test' if '--test-instance' in sys.argv else ''))
     testing='--test-instance' in sys.argv
     if getattr(sys,'frozen',False) and (HOME/maintenance.JOURNAL).exists():
         maintenance.handoff(HOME,{'action':'recover'});return
@@ -208,13 +258,23 @@ def main():
     worker=threading.Thread(target=monitor,daemon=True);worker.start()
     serving=threading.Thread(target=server.serve_forever,kwargs={'poll_interval':.25},daemon=True);serving.start()
     window=webview.create_window(title,url,width=1360,height=900,min_size=(1000,680),background_color='#10171b',text_select=True)
+    def selected_icon():
+        with lock:return avatar_library()[0]
+    desktop_shell=DesktopShell(window,DATA,ASSETS,stop,selected_icon,getattr(sys,'frozen',False),HOME)
+    window.events.shown+=desktop_shell.start
+    window.events.closing+=desktop_shell.closing
     def wait_for_exit():
-        stop.wait();window.destroy()
+        stop.wait();desktop_shell.dispose();window.destroy()
     def close():stop.set()
     window.events.closed+=close
-    try:webview.start(wait_for_exit,gui='edgechromium',private_mode=True,storage_path=str(DATA/'瀏覽器快取'))
+    try:webview.start(wait_for_exit,gui='edgechromium',private_mode=True,storage_path=str(DATA/'瀏覽器快取'),icon=str(ASSETS/'product-default.ico'))
     finally:
         manager.cancelled.set();stop.set();worker.join(timeout=3);server.shutdown();serving.join(timeout=2);server.server_close();k.CloseHandle(mutex)
+        if not maintenance_active.is_set():
+            job=desktop_shell.pending_exe_icon()
+            if job:
+                try:maintenance.handoff(HOME,job)
+                except Exception:logging.exception('EXE 圖示同步未完成，將於下次結束時重試')
 
 if __name__=='__main__':
     try:main()

@@ -140,7 +140,7 @@ class MaintenanceTests(unittest.TestCase):
 
     def test_manager_downloads_only_missing_blocks_no_full_zip(self):
         missing=m.missing_blocks(self.manifest,m.local_blocks(self.home));jobs=[]
-        manager=m.Manager(self.home,True,jobs.append,client_factory=self.client())
+        manager=m.Manager(self.home,True,jobs.append,current='1.2.0',client_factory=self.client())
         manager.run('update')
         self.assertEqual(manager.snapshot()['status'],'restarting')
         self.assertEqual(len(self.fake.calls),len(missing))
@@ -151,7 +151,7 @@ class MaintenanceTests(unittest.TestCase):
 
     def test_download_corruption_or_cancellation_never_applies(self):
         for corrupt,cancel,status in [(True,False,'error'),(False,True,'cancelled')]:
-            manager=m.Manager(self.home,True,lambda _:self.fail('must not apply'),client_factory=self.client(corrupt,cancel))
+            manager=m.Manager(self.home,True,lambda _:self.fail('must not apply'),current='1.2.0',client_factory=self.client(corrupt,cancel))
             manager.run('update');self.assertEqual(manager.snapshot()['status'],status)
             self.assertEqual((self.home/m.EXE).read_bytes(),self.old)
 

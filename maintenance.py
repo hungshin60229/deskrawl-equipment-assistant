@@ -19,7 +19,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-VERSION = '1.2.0'
+VERSION = '1.4.0'
 PRODUCT = 'deskrawl-equipment-assistant'
 REPO = 'hungshin60229/' + PRODUCT
 EXE = '桌面破壞神小助手.exe'
@@ -482,13 +482,14 @@ def schedule_cleanup(folder):
 
 
 def helper_main(job_path):
+    job={};home=None
     folder = Path(sys.executable).resolve().parent
     job_path = Path(job_path).resolve()
     try:
         if folder.parent != Path(tempfile.gettempdir()).resolve() or not folder.name.startswith('DeskrawlAssistant-maintenance-') or job_path != folder / 'job.json':
             raise ValueError('維護程序必須從專用暫存資料夾執行')
         job = json.loads(job_path.read_text(encoding='utf-8'))
-        if job.get('product') != PRODUCT or job.get('action') not in ('update', 'uninstall', 'recover') or type(job.get('pid')) is not int:
+        if job.get('product') != PRODUCT or job.get('action') not in ('update', 'uninstall', 'recover', 'icon') or type(job.get('pid')) is not int:
             raise ValueError('維護操作不正確')
         home = validate_home(job['home'])
         if digest(Path(sys.executable).read_bytes()) != digest((home / EXE).read_bytes()):
@@ -502,11 +503,16 @@ def helper_main(job_path):
             verify_stage(stage, job['manifest'])
         elif job['action'] == 'uninstall':
             removal_plan(home)
+        elif job['action']=='icon':
+            if not SHA.fullmatch(str(job.get('icon_sha256'))):raise ValueError('圖示校驗格式不正確')
         (folder / 'ready').write_text('ready', encoding='ascii')
         wait_for_parent(job['pid'])
         # PyInstaller's one-file parent may retain the original EXE briefly.
         time.sleep(1)
-        if job['action'] in ('update', 'recover'):
+        if job['action']=='icon':
+            from desktop_icons import apply_exe_icon
+            apply_exe_icon(home,folder,job['icon_sha256'])
+        elif job['action'] in ('update', 'recover'):
             for attempt in range(20):
                 try:
                     if job['action'] == 'recover':recover(home)
@@ -532,7 +538,9 @@ def helper_main(job_path):
                 text += '\n資料夾內另有非小助手檔案，因此保留資料夾與這些檔案。'
             if not job.get('testing'):ctypes.windll.user32.MessageBoxW(None, text, '桌面破壞神小助手', 64)
     except Exception as error:
-        ctypes.windll.user32.MessageBoxW(None, '操作未完成：' + str(error) + '\n原有檔案已保留或復原；請重新開啟小助手。', '桌面破壞神小助手', 16)
+        if job.get('action')=='icon':
+            (home/'資料'/'圖示同步錯誤.txt').write_text(str(error),encoding='utf-8')
+        else:ctypes.windll.user32.MessageBoxW(None, '操作未完成：' + str(error) + '\n原有檔案已保留或復原；請重新開啟小助手。', '桌面破壞神小助手', 16)
         return 1
     finally:
         if folder.parent == Path(tempfile.gettempdir()).resolve() and folder.name.startswith('DeskrawlAssistant-maintenance-') and (folder / 'job.json').is_file():

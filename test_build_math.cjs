@@ -1,0 +1,15 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const vm=require('node:vm');
+const source=fs.readFileSync(__dirname+'/assets/builds.js','utf8');
+const math=source.slice(source.indexOf('function stats('),source.indexOf('function statTable('));
+const context={};vm.createContext(context);vm.runInContext(math,context);
+const item=(value,type=0,percent=false)=>({primary:[{stat:'Intelligence',name:'智力',type,value,percent,display:'+1'}],secondary:[],other:[]});
+assert.equal([...context.stats([item(73),item(62)]).values()][0].value,135);
+assert.equal(context.stats([item(.1,1,true),item(.2,2,true)]).size,2,'Different modifier operations must not merge');
+assert.equal(context.format(.38-.3,true,true),'+8.0 個百分點');
+assert.equal(context.format(38-73,false,true),'-35');
+assert.equal(context.format(.1+.2,true),'+30.0%');
+assert.equal(context.format(-1e-12,false,true),'0');
+assert.equal(context.stats([null]).size,0,'Empty slots contribute no stats');
+console.log('Build totals, modifier types, percent-point differences and empty slots passed');

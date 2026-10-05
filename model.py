@@ -33,7 +33,7 @@ def enrich(snapshot,catalog):
             percent=stat in catalog['pct_stats'] or kind in [1,2]
             number=value*100 if percent else value
             formatted=f'{number:.1f}' if percent else f'{number:.2f}'.rstrip('0').rstrip('.')
-            mod={**mod,'name':catalog['stat_names'].get(stat,stat),'display':('+' if number>=0 else '')+formatted+('%' if percent else '')}
+            mod={**mod,'name':catalog['stat_names'].get(stat,stat),'percent':percent,'display':('+' if number>=0 else '')+formatted+('%' if percent else '')}
             group='primary' if stat in pool['primary'] else 'secondary' if stat in pool['secondary'] else 'other'
             # Generator prepends the intrinsic armor roll before its affix draws.
             if index==0 and stat=='Armor' and row['slot'] in ['Helm','Chest','Pants','Boots','Gloves','Shoulder']:

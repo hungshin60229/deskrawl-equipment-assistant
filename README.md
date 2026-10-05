@@ -1,51 +1,60 @@
 # 桌面破壞神小助手
 
-Deskrawl 傳奇裝備篩選器，Windows x64 免安裝桌面工具。
+Deskrawl 傳奇裝備篩選、最愛與 Build 配裝工具，Windows x64 免安裝版。
 
-## 下載與使用
+## 下載與更新
 
-請到 [Releases](https://github.com/hungshin60229/deskrawl-equipment-assistant/releases/latest) 下載 `DeskrawlAssistant-v1.2.0-win-x64-portable.zip`，解壓縮後開啟「桌面破壞神小助手.exe」。一般使用者不需要安裝 Python。
+到 [Releases](https://github.com/hungshin60229/deskrawl-equipment-assistant/releases/latest) 下載 `DeskrawlAssistant-v1.4.0-win-x64-portable.zip`，解壓縮後開啟「桌面破壞神小助手.exe」。一般使用者不需要 Python。
 
-1. 將整個資料夾放在可寫入的位置，不要直接在 ZIP 內執行。
-2. 開啟 Deskrawl 並進入角色，小助手會自動連接本機遊戲。
-3. 選擇部位、主要／次要詞條，按「篩選裝備」。所選條件需全部符合，結果按物品等級由高到低排列。
-4. 裝備位置顯示穿戴欄、背包排與格，或倉庫頁、排與格。
-5. 點頭像或「更換圖片」可上傳、收藏、切換及刪除圖片；預設貓咪固定保留。
-6. 按右上角 × 結束小助手。重複啟動會帶回既有視窗。
+已有 v1.2.0 或更新版本：開啟「小助手設定」→「一鍵更新」，只下載本機缺少的內容區塊並保留圖片與設定。v1.1.0 請手動下載新版一次，保留原有「資料」資料夾。
+
+## 使用功能
+
+1. 開啟 Deskrawl 並進入角色，小助手自動唯讀連接本機遊戲。
+2. 裝備篩選：指定部位、主要／次要詞條，結果依物品等級排序，位置顯示背包排／格與倉庫頁／排／格。
+3. 最愛：點裝備旁的 ☆／★ 加入或取消。「我的最愛」仍可搭配詞條篩選。
+4. Build 配裝：自由搭配 12 個部位，命名、儲存、複製或刪除。候選裝備可依部位、名稱、主要／次要詞條及最愛選取，直接查看替換後差異。
+5. Build 比較：選兩套 Build，查看屬性加總及各部位完整主要、次要與其他屬性。差值以 B − A 計算；百分比顯示百分點差異。可只看有差異的屬性或裝備。
+6. 偏愛詞條：點右側「偏愛詞條」，搜尋、勾選並儲存。符合的詞條在裝備、配裝與比較頁以金色高亮，不改變裝備篩選。
+7. 最愛、Build 與偏愛依角色及線上／本機模式分開保存，裝備移動時依識別碼追蹤。暫時未讀取到的裝備保留最近紀錄；未配置部位會提示。
+8. 點頭像可上傳、收藏、選擇及刪除圖片。預設貓咪保留。視窗、工作列及右下角圖示預設使用指定人像；使用者切換圖片後同步。EXE 圖示在完全結束小助手後套用，檔案總管可能需要重新整理。
+9. 按 × 或「收到右下角」只隱藏視窗。點右下角圖示恢復，右鍵或「結束小助手」完全結束。
+
+Build 顯示的是裝備詞條加總，不代表遊戲最終角色屬性、傷害或實際掉落率。不同加算／乘算類型分開計算；請在遊戲內自行換裝。
 
 ## 環境與相容性
 
-- Windows x64，需要 Microsoft Edge WebView2 Runtime 與 .NET Framework；若系統缺少 WebView2，請從 [Microsoft 官方頁面](https://developer.microsoft.com/microsoft-edge/webview2/) 安裝 Evergreen Runtime。
-- 以 2026-10-05 本機 Deskrawl 遊戲檔案驗證。遊戲更新後，檔案雜湊不同時會停止讀取並提示更新，無法保證其他遊戲版本相容。
-- 不要求固定的遊戲安裝路徑：從執行中的 Deskrawl.exe 與 GameAssembly.dll 自動取得位置。
-- 目前讀取選定角色的穿戴裝備、背包及已載入倉庫；未涵蓋所有未載入角色或離線存檔。
-- 已在開發者 Windows 電腦驗證，尚未在另一台沒有 Python 的電腦上驗證；首次公開提供朋友測試。
+- Windows x64，需要 Microsoft Edge WebView2 Runtime 與 .NET Framework。若缺少 WebView2，請從 [Microsoft 官方頁面](https://developer.microsoft.com/microsoft-edge/webview2/) 安裝 Evergreen Runtime。
+- 以開發者本機 Deskrawl 遊戲檔案驗證。遊戲更新導致檔案雜湊不同時會停止讀取，需更新讀取設定。
+- 自動從執行中的 Deskrawl.exe 與 GameAssembly.dll 判斷遊戲位置，不要求相同的安裝路徑。
+- 目前涵蓋選定角色的穿戴、背包及已載入倉庫中的傳奇裝備；未涵蓋未載入角色或離線存檔。
+- 已在開發者 Windows 電腦測試；其他電腦與不同遊戲版本仍需實際驗證。
 
-## 唯讀方式與本機資料
+## 唯讀與本機資料
 
-程式僅透過 `PROCESS_VM_READ`、`PROCESS_QUERY_LIMITED_INFORMATION` 與 `ReadProcessMemory` 讀取本機遊戲程序，不呼叫寫入程序記憶體、注入或修改存檔功能。無須提供遊戲帳密。
+僅透過 `PROCESS_VM_READ`、`PROCESS_QUERY_LIMITED_INFORMATION` 與 `ReadProcessMemory` 讀取本機遊戲，不寫入記憶體、不注入、不修改存檔，無須遊戲帳密。
 
-介面服務只綁定 `127.0.0.1`，使用每次啟動的新權杖。裝備快照、篩選條件、圖片收藏及紀錄保存在執行檔旁的「資料」資料夾，不會自動上傳到 GitHub 或其他伺服器。發布包不包含開發者的角色資料、照片、圖片收藏、連線權杖或紀錄。
+介面只綁定 `127.0.0.1` 並使用每次啟動的新權杖。快照、篩選、最愛、Build、偏愛與圖片保存在執行檔旁的「資料」資料夾，不上傳。發布包包含指定的預設人像與貓咪素材，不含私人圖片收藏、角色資料、連線權杖或紀錄。
 
 ## 原始碼與建置
 
-本倉庫提供可閱讀的 Python 原始碼；`assets.zip` 包含 `assets/` 介面、讀取設定及圖片。請先將它解壓縮到倉庫根目錄，再以 Windows x64 Python 3.12 建置：
+倉庫的 `assets.zip` 包含介面、圖示與讀取設定，先解壓縮到倉庫根目錄。Windows x64 Python 3.12：
 
 ```powershell
 python -m pip install -r requirements.txt
-python -m unittest test_core test_avatar test_maintenance -v
+python -m unittest discover -v
 python app.py
 python -m pip install PyInstaller==6.20.0
-python -m PyInstaller --noconfirm --onefile --windowed --name 桌面破壞神小助手 --add-data "assets;assets" --collect-all webview --hidden-import pythonnet --hidden-import clr app.py
+python -m PyInstaller --noconfirm 桌面破壞神小助手.spec
 ```
 
-Release 另提供完整原始碼 ZIP。請勿將「資料」資料夾加入 Git 或分享給他人。
+選用 Node.js 可執行 `node test_build_math.cjs` 驗證加總與百分點差值。Release 另提供完整原始碼 ZIP。請勿分享「資料」資料夾。
 
-## 資料來源
+## 資料與素材來源
 
-裝備名稱與詞條分類參考 [X1X 桌面破壞神物品圖鑑](https://x1x.tw/deskrawl/items/)。遊戲圖示來自 Deskrawl，相關遊戲名稱、圖像及資料權利屬原權利人。本工具非官方作品。本倉庫未指定涵蓋第三方素材的再授權。
+名稱與詞條分類參考 [X1X 桌面破壞神物品圖鑑](https://x1x.tw/deskrawl/items/)。遊戲圖像與資料權利屬原權利人，本工具非官方作品。本倉庫未指定涵蓋第三方素材的再授權。
 
-預設頭像依使用者提供的貓咪圖像以 imagegen 整理；介面標語「自私的人永遠得不到滿足，或許我也是」由使用者提供，署名許至均。
+預設貓咪及人像由使用者提供；標語「自私的人永遠得不到滿足，或許我也是」署名許至均。
 
 ## 一鍵更新與完全移除（v1.2.0 起）
 
@@ -58,7 +67,7 @@ Release 另提供完整原始碼 ZIP。請勿將「資料」資料夾加入 Git 
 
 **v1.1.0 沒有更新按鈕，需手動下載 v1.2.0 一次。** 從 v1.2.0 起可使用增量更新。節省比例取決於兩個版本的差異；Python 或相依元件大幅更換時，下載量也可能接近完整程式。
 
-發布包內沒有個人照片、遊戲資訊或權杖。更新只向 GitHub 下載版本資訊及區塊，不上傳本機資料。更新信任本 GitHub 專案的發布者，並依 GitHub 回傳的 SHA-256 與版本清單驗證；校驗不代表第三方程式碼簽章。
+發布包包含使用者指定的預設人像圖示，不包含私人圖片收藏、遊戲資訊或權杖。更新只向 GitHub 下載版本資訊及區塊，不上傳本機資料。更新信任本 GitHub 專案的發布者，並依 GitHub 回傳的 SHA-256 與版本清單驗證；校驗不代表第三方程式碼簽章。
 
 ### 發布新的增量版本
 

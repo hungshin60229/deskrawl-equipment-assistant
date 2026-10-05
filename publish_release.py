@@ -1,6 +1,6 @@
 """Prepare clean portable/source packages and content-addressed update assets.
 
-python publish_release.py --exe release_v1_2/桌面破壞神小助手.exe --output ../github_publish_v1_2
+python publish_release.py --exe release_v1_4/桌面破壞神小助手.exe --output ../github_publish_v1_4
 Upload every file in output/release_assets to the SAME GitHub release. Publish
 only when all files have uploaded. The updater refuses incomplete releases.
 """
@@ -18,14 +18,13 @@ def prepare(executable, output):
     output = Path(output).resolve();output.mkdir(parents=True,exist_ok=True)
     assets = output/'release_assets';assets.mkdir(exist_ok=True)
     repo = output/'repository';repo.mkdir(exist_ok=True)
-    allow = ['app.py','reader.py','model.py','maintenance.py','publish_release.py',
-             'test_core.py','test_avatar.py','test_maintenance.py','requirements.txt','使用說明.txt']
+    allow = ['app.py','reader.py','model.py','maintenance.py','desktop_icons.py','loadouts.py','test_loadouts.py','test_icons.py','publish_release.py',
+             'test_core.py','test_avatar.py','test_maintenance.py','test_loadout_api.py','test_build_math.cjs','requirements.txt','使用說明.txt','桌面破壞神小助手.spec']
     for name in allow:shutil.copy2(source/name,repo/name)
     prior_docs = source
     for name in ['README.md','THIRD_PARTY_NOTICES.md','.gitignore']:
         shutil.copy2(prior_docs/name,repo/name)
-    readme=(repo/'README.md').read_text(encoding='utf-8').replace('v1.1.0','v'+m.VERSION)
-    readme=readme.replace('python -m unittest test_core test_avatar -v','python -m unittest test_core test_avatar test_maintenance -v')
+    readme=(repo/'README.md').read_text(encoding='utf-8').replace('{VERSION}',m.VERSION)
     readme+='''
 ## 一鍵更新與完全移除（v1.2.0 起）
 
@@ -38,7 +37,7 @@ def prepare(executable, output):
 
 **v1.1.0 沒有更新按鈕，需手動下載 v1.2.0 一次。** 從 v1.2.0 起可使用增量更新。節省比例取決於兩個版本的差異；Python 或相依元件大幅更換時，下載量也可能接近完整程式。
 
-發布包內沒有個人照片、遊戲資訊或權杖。更新只向 GitHub 下載版本資訊及區塊，不上傳本機資料。更新信任本 GitHub 專案的發布者，並依 GitHub 回傳的 SHA-256 與版本清單驗證；校驗不代表第三方程式碼簽章。
+發布包包含使用者指定的預設人像圖示，不包含私人圖片收藏、遊戲資訊或權杖。更新只向 GitHub 下載版本資訊及區塊，不上傳本機資料。更新信任本 GitHub 專案的發布者，並依 GitHub 回傳的 SHA-256 與版本清單驗證；校驗不代表第三方程式碼簽章。
 
 ### 發布新的增量版本
 
