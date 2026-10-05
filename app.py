@@ -1,4 +1,7 @@
 import json,threading,time,sys,os,secrets,logging,hashlib,re
+import maintenance
+if __name__=='__main__' and '--maintenance' in sys.argv:
+    sys.exit(maintenance.helper_main(sys.argv[sys.argv.index('--maintenance')+1]))
 from pathlib import Path
 from http.server import ThreadingHTTPServer,BaseHTTPRequestHandler
 from urllib.parse import urlsplit,parse_qs
@@ -17,6 +20,12 @@ except (OSError,ValueError):filters={'slot':'','primary':[],'secondary':[]}
 state={'status':'waiting','message':'正在連接遊戲','items':[],'character':None,'updated_at':None,'revision':0}
 lock=threading.Lock();stop=threading.Event();token=secrets.token_urlsafe(24)
 logging.basicConfig(filename=DATA/'小助手.log',encoding='utf-8',level=logging.INFO,format='%(asctime)s %(message)s')
+
+def prepare_maintenance(job):
+    maintenance.handoff(HOME,job)
+    stop.set()
+
+manager=maintenance.Manager(HOME,getattr(sys,'frozen',False),prepare_maintenance)
 
 def atomic_json(path,data):
     temp=path.with_suffix('.tmp');temp.write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8');temp.replace(path)
@@ -84,6 +93,7 @@ class Handler(BaseHTTPRequestHandler):
                 with lock:body=json.dumps(filters,ensure_ascii=False).encode('utf-8')
             elif path=='/api/avatars':
                 with lock:selected,entries=avatar_library();body=json.dumps({'selected':selected,'images':entries},ensure_ascii=False).encode('utf-8')
+            elif path=='/api/maintenance':body=json.dumps(manager.snapshot(),ensure_ascii=False).encode('utf-8')
             else:self.send(404,b'Not found','text/plain');return
             self.send(200,body,'application/json; charset=utf-8');return
         if path=='/':filename=ASSETS/'index.html'
@@ -99,7 +109,19 @@ class Handler(BaseHTTPRequestHandler):
         typ={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.png':'image/png'}[filename.suffix]
         self.send(200,filename.read_bytes(),typ)
     def do_POST(self):
+        if self.headers.get('Host') not in [f'127.0.0.1:{self.server.server_port}',f'localhost:{self.server.server_port}']:
+            self.send(403,b'Forbidden','text/plain');return
         if self.headers.get('X-Assistant-Token')!=token:self.send(403,b'Forbidden','text/plain');return
+        if self.path in ['/api/update','/api/uninstall','/api/update/cancel']:
+            try:
+                if self.path=='/api/update/cancel':
+                    if manager.snapshot()['status'] not in ['checking','downloading','preparing']:raise ValueError('目前無法取消操作')
+                    manager.cancelled.set()
+                else:manager.start('update' if self.path=='/api/update' else 'uninstall')
+                self.send(200,b'{}','application/json')
+            except (ValueError,OSError) as error:
+                self.send(400,json.dumps({'error':str(error)},ensure_ascii=False).encode('utf-8'),'application/json; charset=utf-8')
+            return
         if self.path=='/api/avatar/delete':
             try:
                 length=int(self.headers.get('Content-Length','0'))
@@ -167,6 +189,8 @@ def main():
     import ctypes as C
     import webview
     testing='--test-instance' in sys.argv
+    if getattr(sys,'frozen',False) and (HOME/maintenance.JOURNAL).exists():
+        maintenance.handoff(HOME,{'action':'recover'});return
     title='桌面破壞神小助手 — 裝備篩選器'+('（測試）' if testing else '')
     k=C.WinDLL('kernel32',use_last_error=True)
     k.CreateMutexW.argtypes=[C.c_void_p,C.c_int,C.c_wchar_p];k.CreateMutexW.restype=C.c_void_p
@@ -188,9 +212,9 @@ def main():
         stop.wait();window.destroy()
     def close():stop.set()
     window.events.closed+=close
-    try:webview.start(wait_for_exit,gui='edgechromium',private_mode=True)
+    try:webview.start(wait_for_exit,gui='edgechromium',private_mode=True,storage_path=str(DATA/'瀏覽器快取'))
     finally:
-        stop.set();worker.join(timeout=3);server.shutdown();serving.join(timeout=2);server.server_close();k.CloseHandle(mutex)
+        manager.cancelled.set();stop.set();worker.join(timeout=3);server.shutdown();serving.join(timeout=2);server.server_close();k.CloseHandle(mutex)
 
 if __name__=='__main__':
     try:main()
